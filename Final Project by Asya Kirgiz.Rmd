@@ -1,0 +1,138 @@
+---
+title: "Final Project Spring '19"
+author: "Asya Kirgiz"
+date: "April 28, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Birth Data Description
+
+This data set contains monthly live births in thousands for the United states from year 1948 to 1979:
+```{r birth}
+data(birth,package="astsa")
+start(birth)
+end(birth)
+frequency(birth)
+
+summary(birth)
+```
+
+Data references: <http://www.stat.pitt.edu/stoffer/tsa4/>.
+
+## Plots
+
+Plots help you visualize the data and spot any trends:
+
+```{r plot}
+plot(birth)
+abline(reg=lm(birth~time(birth)))
+cycle(birth)
+boxplot(birth ~ cycle(birth))
+```
+
+## Investigate seasonal patterns in the data
+
+Notice seasonal difference between number of births in Aprils vs. Octobers
+
+```{r invest, echo=FALSE}
+plot(aggregate(birth)) #removes seasonal changes
+birth.April <- window(birth, start=c(1948,4), freq = TRUE)
+plot(birth.April)
+birth.October <- window(birth, start=c(1948,10), freq = TRUE)
+plot(birth.October)
+```
+
+## Decompose using multiplicative model
+
+
+```{r decomp}
+birth.decom <- decompose(birth, type="mult")
+plot(birth.decom)
+```
+
+The trend over years seem to folow a smoth curve that is showing an upward trend until 1962, then turning and displaying a downward trend until 1975 and then reversing into an upward trend again. These changes in number of births in US could be explained by historical and econamical events.
+There are clear seasonal variations in the data. 
+The random part of the data does look random.
+
+## Transformation
+
+```{r trans}
+qqnorm(birth)
+```
+Examining Q-Q norm plot of birth data which looks close to a straight line suggests that the distribution could be reasonably assumed to be normal.
+
+## Autocorrelation for lag 1, lag 2, lag 3 
+
+```{r corr}
+acf(birth)$acf[2]
+acf(birth)$acf[3]
+acf(birth)$acf[4]
+pacf(birth)
+```
+
+## Model fitting
+
+This naive model is actually a decent fit judging from graphs below:
+```{r naive, echo=FALSE}
+library(forecast)
+birth_fit = naive(birth)
+plot(birth_fit)
+```
+
+Let's look at autocorrelation of birth differences from month to month:
+```{r diff, echo=FALSE}
+birth_change <- diff(birth) #changes in birth rate
+acf(birth_change, lag.max = 3)
+```
+
+Now, let's fit a first order moving average model MA_birth_change, a first order auto-regression model AR_birth_change and an ARIMA model.
+```{r models}
+MA_birth_change <- arima(birth_change, order=c(0,0,1))
+AR_birth_change <- arima(birth_change, order=c(1,0,0))
+ARIMA_birth_change <- arima(birth_change, order=c(1,1,1))
+```
+
+
+## Evaluate the models
+Use residuals to diagnose the models.
+```{r resid}
+checkresiduals(birth_fit)
+checkresiduals(MA_birth_change)
+checkresiduals(AR_birth_change)
+checkresiduals(ARIMA_birth_change)
+
+accuracy(birth_fit)
+accuracy(MA_birth_change)
+accuracy(AR_birth_change)
+accuracy(ARIMA_birth_change)
+```
+The residuals of all models resamble random distributions and their means are close to zero, therefore all of the above models are reasonable representation of birth data. ARIMA_birth_change model's residuals are closest to a normal distribution with constant variance, therefore it is the best model.
+
+From comparing the errors of the models we can see that ARIMA_birth_change has smallest values which confirms that it is the best model.
+
+
+Secondly, use information criterion AIC and BIC to evaluate the models.
+```{r eval}
+AIC(MA_birth_change)
+AIC(AR_birth_change)
+AIC(ARIMA_birth_change)
+
+BIC(MA_birth_change)
+BIC(AR_birth_change)
+BIC(ARIMA_birth_change)
+```
+The ARIMA_birth_change model has lowest AIC and BIC than others, so we'll use it for foreasting.
+
+
+## Forecasting
+
+Predict birth numbers one year into the future:
+```{r forec}
+predict(ARIMA_birth_change, n.ahead = 12)
+future = forecast(ARIMA_birth_change, h = 12)
+plot(future)
+```
